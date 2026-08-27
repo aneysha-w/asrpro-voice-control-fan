@@ -1,2 +1,54 @@
-# asrpro-voice-control-fan
-Voice‑controlled fan based on ASRPRO chip, implement PWM speed adjustment and eliminate motor howling noise.
+# 🌬️ ASRPRO 智能语音调速风扇控制系统
+*(Voice-Controlled Smart DC Fan Based on ASRPRO)*
+
+![Chip](https://img.shields.io/badge/MCU-ASRPRO-orange.svg)
+![Hardware](https://img.shields.io/badge/Hardware-PCB_Layout-green.svg)
+![Power](https://img.shields.io/badge/Power-DC--DC_Buck-blue.svg)
+
+> **💡 项目简介：** 
+> 本系统以低成本离线语音芯片 ASRPRO 为交互核心，独立设计并打板了完整的硬件控制电路。通过 TPS5430 实现 12V 至 5V 的高效 DC-DC 降压，利用 SS8050 三极管配合 PWM 斩波技术，实现了对直流风扇的 4 档无接触式平滑调速。
+
+---
+
+## 📸 实物展示 (Product Showcase)
+
+![实物成品图](https://raw.githubusercontent.com/aneysha-w/asrpro-voice-control-fan/refs/heads/main/%E6%88%90%E5%93%81.jpg)
+
+---
+
+## 🛠️ 核心硬件设计 (Hardware Design)
+
+### 1. 电源管理 (TPS5430 Buck 拓扑)
+- **选型考量：** 摒弃了 LM7805 线性稳压方案（压差达 7V，热耗散严重易触发热关断），采用 TPS5430 开关型 DC-DC 降压稳压器，转换效率达 90% 以上。
+- **PCB 布局：** 严格控制 VIN-开关管-电感-二极管-地的电流环路面积最小化，减少对外辐射。
+
+### 2. 电机驱动 (NPN 低边驱动)
+- 采用大功率 **SS8050 NPN 三极管** 作为低边控制开关，基极串联限流电阻。
+- **保护机制：** 针对直流电机的感性负载特性，反向并联 **1N5819 肖特基二极管** 作为续流二极管，吸收断电瞬间的反向电动势。
+
+### 3. 单点共地 (Single-point Grounding)
+- 将麦克风/喇叭所在的“音频模拟地”与 12V 大电流电机的“功率地”进行分区敷铜，仅在电源输入侧单点连接，彻底消除电机斩波对音频采样的干扰。
+
+---
+
+## 💻 软件逻辑与控制 (Software Logic)
+
+### 1. 有限状态机 (FSM)
+- `State 0` (休眠态)：系统默认待机，仅监听唤醒词（如“天问一号”）。
+- `State 1` (交互态)：唤醒后开启 15 秒指令延时窗口。接收有效风速指令则跳转执行；超时未操作则自动播报退出，防止日常聊天误触发。
+
+### 2. PWM 多档位调速
+利用内部 Timer 生成 PWM 信号输入三极管基极，实现 4 档等效直流降压：
+- ⏹️ **停止：** PWM 0%
+- 🎐 **一档：** PWM 25% (等效电压 ~2.9V)
+- 🌬️ **二档：** PWM 45% (等效电压 ~5.2V)
+- 🌪️ **三档：** PWM 65% (等效电压 ~7.6V)
+- 🌀 **四档：** PWM 85% (等效电压 ~10.0V)
+
+---
+
+## 🔍 工程排故实录 (Debugging Log)
+*在项目的硬件联调阶段，我独立排查并解决了以下典型工程问题：*
+
+1. **降压模块无输出：** 万用表测得无 5V 输出，经排查为 Buck 拓扑中肖特基二极管极性焊反，导致电感无法释放能量。重新核对极性焊接后解决。
+2. **风扇带载能力衰减 (电机转速骤降/停转)：** 连续执行几次调速操作后，出现风扇停转但语音偶有响应的现象。使用万用表对输入端进行带载监测，发现 12V 电池在电机启动瞬间电压急剧跌落至 5V 左右。**根本原因分析：** 初始采用的 12V 电池容量较小且放电倍率 (C数) 不足，经过多次大电流消耗后电池电量耗尽且内阻增大，其残余功率无法支撑电机感性负载的运转。**解决：** 更换具有更大安时容量 (Ah) 且放电电流稳定的全新 12V 电池组后，电机运转有力，带载恢复稳定。
